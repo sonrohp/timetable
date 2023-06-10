@@ -1,0 +1,105 @@
+// Helper function to get the week number
+Date.prototype.getWeek = function() {
+  var onejan = new Date(this.getFullYear(), 0, 1);
+  return Math.ceil((((this - onejan) / 86400000) + onejan.getDay() + 1) / 7);
+}
+
+function importData() {
+  // Helper function to get the week number (Monday to Sunday)
+  Date.prototype.getWeek = function() {
+    var target = new Date(this.valueOf());
+    var dayNr = (this.getDay() + 6) % 7;
+    target.setDate(target.getDate() - dayNr + 3);
+    var firstThursday = target.valueOf();
+    target.setMonth(0, 1);
+    if (target.getDay() !== 4) {
+      target.setMonth(0, 1 + ((4 - target.getDay()) + 7) % 7);
+    }
+    return 1 + Math.ceil((firstThursday - target) / 604800000);
+  };
+
+  var sourceSheet = SpreadsheetApp.openByUrl('https://docs.google.com/spreadsheets/d/1vmq2w2-9I3PB0lfqBJuFI_jBL23WVJgd_IPMWTCa3fo/edit#gid=0').getSheetByName('Term IV Schedule');
+  var destinationSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Test Mark 2-A');
+
+  destinationSheet.clear(); // Clear the destination sheet
+
+  var sourceData = sourceSheet.getDataRange().getValues(); // Get data from source sheet
+
+  var startDate = new Date('2023-06-13'); // Replace with the actual start date of your semester
+  var endDate = new Date('2023-09-30'); // Replace with the actual end date of your semester
+
+  // Create an empty list for filtered data
+  var filteredData = [];
+
+  // Add headers
+  filteredData.push(['Date', 'Day', 'Time Slot', 'Classroom', 'Subject']);
+
+  for (var date = new Date(startDate); date <= endDate; date.setDate(date.getDate() + 1)) {
+    var dateString = Utilities.formatDate(new Date(date), 'IST', 'd MMMM yyyy'); // Format the date
+    var dayString = Utilities.formatDate(new Date(date), 'IST', 'EEEE'); // Get the day of the week
+
+    sourceData.forEach(function(row, rowIndex) {
+      if (rowIndex < 6) return; // Skip the rows until data starts
+
+      // Convert the string to a date
+      var rowDate = new Date(row[0]);
+      // Format the date
+      var formattedRowDate = Utilities.formatDate(rowDate, 'IST', 'd MMMM yyyy');
+
+      var timeSlot = row[1]; // The time slot is in the second column
+
+      // Only consider rows with the current date
+      if (formattedRowDate !== dateString) return;
+
+      row.slice(2).forEach(function(cell, colIndex) { // Start from third column
+        var subject = cell.split(' - ')[0]; // Extract the subject from the cell value
+
+        if (['SOM', 'EG', 'SLS', 'PM-A', 'SMI-A', 'MBM'].includes(subject)) {
+          var classroom = sourceData[4][colIndex + 2]; // The classrooms are in the fifth row, starting from the third column
+          filteredData.push([dateString, dayString, timeSlot, classroom, subject]); // Save the date, day of the week, time slot, classroom and subject
+        }
+      });
+    });
+  }
+
+  if (filteredData.length > 0) {
+    // Add 1 to the number of rows to account for the header row
+    destinationSheet.getRange(1, 1, filteredData.length, 5).setValues(filteredData);
+  }
+
+  // Freeze the top row
+  destinationSheet.setFrozenRows(1);
+
+  // Call the colorRows function
+  colorRows();
+}
+
+
+
+
+function colorRows() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Test Mark 2-A');
+  
+  var data = sheet.getDataRange().getValues(); // Get data from the sheet
+  
+  var week = 0; // Initialize week counter
+  var prevDate = new Date(data[0][0]); // Get date of first row
+
+  data.forEach(function(row, rowIndex) {
+    var date = new Date(row[0]); // Get date of current row
+    var rowRange = sheet.getRange(rowIndex + 1, 1, 1, 5); // Get range of current row
+
+    // If we are on a new week, update week counter
+    if (date.getWeek() !== prevDate.getWeek()) week++;
+
+    // Color row depending on week number
+    if (week % 2 === 0) rowRange.setBackground('#F0F8FF'); // Light blue
+    else rowRange.setBackground('#FFFFFF'); // White
+
+    // If we are on a new day, add a thick border above the row
+    if (date.getDate() !== prevDate.getDate()) rowRange.setBorder(true, null, null, null, null, null, '#000000', SpreadsheetApp.BorderStyle.SOLID_THICK);
+
+    prevDate = date; // Update previous date
+  });
+}
+
